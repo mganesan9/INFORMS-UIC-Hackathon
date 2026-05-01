@@ -286,21 +286,21 @@ export class ChatAgent extends AIChatAgent<Env> {
       agentData = await costAnalystAgent(name);
     }
 
-    // ── Step 3: If we have pre-fetched data, stream it directly ──────────
-    // Build SSE in the exact format AIChatAgent._streamSSEReply parses:
-    // text-start → text-delta → text-end, then finish chunks.
+    // ── Step 3: Stream pre-fetched data directly, line by line ───────────
+    // AIChatAgent._streamSSEReply expects: text-start → N×text-delta → text-end → finish
     if (agentData) {
       const msgId = crypto.randomUUID();
-      const lines = [
-        `data: ${JSON.stringify({ type: "text-start", id: msgId })}\n\n`,
-        `data: ${JSON.stringify({ type: "text-delta", id: msgId, delta: agentData })}\n\n`,
-        `data: ${JSON.stringify({ type: "text-end", id: msgId })}\n\n`,
-        `data: ${JSON.stringify({ type: "finish", finishReason: "stop", usage: { promptTokens: 0, completionTokens: 0 } })}\n\n`,
-      ];
       const encoder = new TextEncoder();
+      const dataLines = agentData.split("\n");
       const stream = new ReadableStream({
         start(controller) {
-          for (const line of lines) controller.enqueue(encoder.encode(line));
+          const emit = (obj: object) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+          emit({ type: "text-start", id: msgId });
+          for (const line of dataLines) {
+            emit({ type: "text-delta", id: msgId, delta: line + "\n" });
+          }
+          emit({ type: "text-end", id: msgId });
+          emit({ type: "finish", finishReason: "stop", usage: { promptTokens: 0, completionTokens: 0 } });
           controller.close();
         }
       });

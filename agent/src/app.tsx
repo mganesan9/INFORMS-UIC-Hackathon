@@ -794,8 +794,8 @@ function Chat() {
                     }
 
                     return (
-                      <div key={i} className="flex justify-start">
-                        <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-kumo-base text-kumo-default leading-relaxed">
+                      <div key={i} className="flex justify-start w-full">
+                        <div className="w-full rounded-2xl rounded-bl-md bg-kumo-base text-kumo-default leading-relaxed overflow-x-auto">
                           <Streamdown
                             className="sd-theme rounded-2xl rounded-bl-md p-3"
                             plugins={{ code }}
