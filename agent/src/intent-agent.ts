@@ -92,24 +92,31 @@ export class IntentAgent {
       }
     }
 
-    // Pattern 3: Patient-specific queries (mentions a patient name or "this patient")
+    // Pattern 3: Patient-specific queries — match against ORIGINAL query (preserves capitalisation)
     const patientSpecificPatterns = [
-      /(?:tell|show|what|why|analyze|explain).*(?:about|for|on)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-      /^patient[:\s]+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-      /^([A-Z][a-z]+\s+[A-Z][a-z]+)['\s]?s/i,
-      /why is\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-      /this patient['\s]?s/i,
-      /what conditions does/i,
+      /(?:tell|show|what|why|analyze|explain).*(?:about|for|on)\s+([A-Za-z]+\s+[A-Za-z]+)/i,
+      /^patient[:\s]+([A-Za-z]+\s+[A-Za-z]+)/i,
+      /why is\s+([A-Za-z]+\s+[A-Za-z]+)/i,
+      /drill.?down.*?([A-Za-z]+\s+[A-Za-z]+)/i,
+      /(?:costs?|expensive|spending|analysis|breakdown|profile)\s+(?:for|of|on)\s+([A-Za-z]+\s+[A-Za-z]+)/i,
+      /^([A-Za-z]+\s+[A-Za-z]+)['\s]?s\s+(?:cost|spending|visit|condition|med)/i,
     ];
 
-    // Check for patient-specific mentions (extract name)
+    // Match against original query to preserve capitalisation for name extraction
     let patientMatch = null;
     for (const pattern of patientSpecificPatterns) {
-      const match = lowerQuery.match(pattern);
+      const match = userQuery.match(pattern);
       if (match && match[1]) {
         patientMatch = match[1];
         break;
       }
+    }
+
+    // Also catch bare two-word names like "Soledad White" or "Giovanni Paucek"
+    // when the query is short and doesn't match a portfolio/search pattern
+    if (!patientMatch) {
+      const bareNameMatch = userQuery.trim().match(/^([A-Za-z]+\s+[A-Za-z]+)$/);
+      if (bareNameMatch) patientMatch = bareNameMatch[1];
     }
 
     // If we found a patient name and it's clearly about that patient

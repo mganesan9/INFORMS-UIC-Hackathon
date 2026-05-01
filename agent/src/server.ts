@@ -101,19 +101,7 @@ BEFORE doing anything else, use the **classifyIntent** tool. It returns one of f
 
 **patient_specific** — "Tell me about Giovanni Paucek's costs" / "Why is Lindsay Brekke expensive?"
 - Call **runCostAnalysis** with the patient name
-- After the tool returns its result, you MUST immediately render both tables below — never stop after the tool call without rendering them
-
-**📋 Why This Patient's Costs Are High**
-| # | Cost Driver | Key Fact | Why It Matters |
-|---|---|---|---|
-Exactly 5 rows. Plain language only — no clinical jargon. Lead Key Fact with the most important number (e.g. "Went to the ER 44 times", not "high ED utilization").
-
-**✅ What the Care Manager Should Do**
-| Priority | Action | Owner | When |
-|---|---|---|---|
-Exactly 5 rows. Sorted URGENT → HIGH → MEDIUM. One concrete action per row with owner and timeframe.
-
-- End with exactly one line: "Want me to draft an outreach message or full care plan for [patient name]?"
+- The tool returns fully-formatted markdown. Output it EXACTLY as returned — do not summarize, paraphrase, or add anything before or after it.
 
 **patient_search** — "Find patients with >10 ED visits" / "Show me diabetics without care plans"
 - Call **findPatientCandidates** with the search criteria as the query
@@ -350,22 +338,39 @@ Exactly 5 rows. Sorted URGENT → HIGH → MEDIUM. One concrete action per row w
             if (obs.some(o => /food/i.test(o.DESCRIPTION))) sdohRisks.push({ factor: "Food Insecurity", value: "Documented", action: "Connect to SNAP, food pantry, community nutrition programs" });
             if (obs.some(o => /stress/i.test(o.DESCRIPTION))) sdohRisks.push({ factor: "Stress / Mental Health", value: "Documented", action: "Behavioral health referral; peer support; care coordination" });
 
-            return {
-              patient: { id: pid, name: displayName, demographics: { gender: demo.GENDER, dob: demo.BIRTHDATE, city: demo.CITY, state: demo.STATE, income: demo.INCOME, race: demo.RACE } },
-              costSummary: { totalCost: `$${totalCost.toLocaleString()}`, edInpatientCost: `$${edInpatientCost.toLocaleString()}`, edInpatientPct: `${edInpatientPct}%`, edVisits, inpatientVisits, chronicConditions: parseInt(s.chronic_condition_count) || 0, hasActiveCareplan: activeCareplan },
-              costByEncounterClass: costByClass,
-              topCostMedications: topMeds.slice(0, 5),
-              topCostProcedures: topProcs.slice(0, 5),
-              activeConditionCount: activeConditions.length,
-              activeMedicationCount: activeMeds.length,
-              avoidablePatterns: flags,
-              sdohRisks,
-              priorityLevel: flags.some(f => f.severity === "URGENT") ? "URGENT" : flags.some(f => f.severity === "HIGH") ? "HIGH" : "MEDIUM",
-              suggestedActions: [
-                ...flags.map(f => `[${f.severity}] ${f.category}: ${f.action}`),
-                ...sdohRisks.map(r => `[SDOH] ${r.factor}: ${r.action}`),
-              ],
-            };
+            // Build the why-table rows (up to 5)
+            const whyRows: string[] = [];
+            if (edVisits > 0) whyRows.push(`| ${whyRows.length+1} | Emergency Room Overuse | Visited the ER ${edVisits} times | Each ED visit costs ~$1,500–$3,000 and often treats issues that primary care could handle |`);
+            if (inpatientVisits > 0) whyRows.push(`| ${whyRows.length+1} | Frequent Hospitalizations | Admitted ${inpatientVisits} times | Inpatient stays are the single biggest cost driver in most high-cost patients |`);
+            if (substanceConditions.length) whyRows.push(`| ${whyRows.length+1} | Substance Use Disorder | Active diagnosis: ${substanceConditions[0].DESCRIPTION} | SUD drives repeated crisis visits and makes every other condition harder to manage |`);
+            if (parseInt(s.chronic_condition_count) > 10) whyRows.push(`| ${whyRows.length+1} | Multiple Chronic Conditions | ${s.chronic_condition_count} active chronic conditions | Managing many conditions simultaneously increases specialist visits, meds, and hospitalizations |`);
+            if (!activeCareplan) whyRows.push(`| ${whyRows.length+1} | No Active Care Plan | Care plan is missing | Without a plan, care is reactive (ED/hospital) instead of proactive (primary care) |`);
+            if (activeMeds.length > 10) whyRows.push(`| ${whyRows.length+1} | High Medication Burden | ${activeMeds.length} active medications | Polypharmacy increases adverse events, non-adherence, and avoidable hospitalizations |`);
+            if (edInpatientPct && parseFloat(edInpatientPct) > 70) whyRows.push(`| ${whyRows.length+1} | Cost Concentrated in Acute Care | ${edInpatientPct}% of total cost is ED + inpatient | Almost all spending is on crisis care — very little on prevention or management |`);
+            if (sdohRisks.length) whyRows.push(`| ${whyRows.length+1} | Social Barriers to Care | ${sdohRisks.map(r => r.factor).join(", ")} | Social factors make it hard to follow care plans, take medications, or keep appointments |`);
+            const whyTable = whyRows.slice(0, 5).join("\n") || `| 1 | Insufficient data | Could not retrieve full record | — |`;
+
+            // Build the actions table (up to 5), URGENT first
+            const allActions = [
+              ...flags.map(f => ({ priority: f.severity, action: f.action, owner: f.category.includes("Care Plan") ? "Care Team" : f.category.includes("Substance") ? "Care Manager + Clinician" : "Care Manager", when: f.severity === "URGENT" ? "Within 24–48 hours" : "Within 1 week" })),
+              ...sdohRisks.map(r => ({ priority: "MEDIUM", action: r.action, owner: "Social Worker", when: "Within 2 weeks" })),
+            ].sort((a, b) => (a.priority === "URGENT" ? -1 : b.priority === "URGENT" ? 1 : 0));
+            const actionRows = allActions.slice(0, 5).map(a => `| ${a.priority} | ${a.action} | ${a.owner} | ${a.when} |`).join("\n")
+              || `| MEDIUM | Schedule comprehensive patient assessment | Care Manager | Within 1 week |`;
+
+            return `**📋 Why This Patient's Costs Are High — ${displayName}**
+
+| # | Cost Driver | Key Fact | Why It Matters |
+|---|---|---|---|
+${whyTable}
+
+**✅ What the Care Manager Should Do**
+
+| Priority | Action | Owner | When |
+|---|---|---|---|
+${actionRows}
+
+Want me to draft an outreach message or full care plan for ${displayName}?`;
           },
         }),
 
