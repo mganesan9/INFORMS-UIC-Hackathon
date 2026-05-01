@@ -71,7 +71,7 @@ export class ChatAgent extends AIChatAgent<Env> {
     const workersai = createWorkersAI({ binding: this.env.AI });
 
     const result = streamText({
-      model: workersai("@cf/moonshotai/kimi-k2.6", {
+      model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         sessionAffinity: this.sessionAffinity
       }),
       system: `You are a cost analytics agent for a value-based primary care practice. Your job is to help care managers understand WHY patients are expensive and WHICH costs can be reduced.
