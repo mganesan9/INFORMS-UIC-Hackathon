@@ -4,8 +4,6 @@ import { getSchedulePrompt, scheduleSchema } from "agents/schedule";
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
   convertToModelMessages,
-  createUIMessageStream,
-  createUIMessageStreamResponse,
   pruneMessages,
   stepCountIs,
   streamText,
@@ -289,15 +287,32 @@ export class ChatAgent extends AIChatAgent<Env> {
     }
 
     // ── Step 3: If we have pre-fetched data, stream it directly ──────────
-    // Bypass the model entirely — no truncation or paraphrasing possible.
+    // Build SSE in the exact format AIChatAgent._streamSSEReply parses:
+    // text-start → text-delta → text-end, then finish chunks.
     if (agentData) {
-      const text = agentData;
-      const stream = createUIMessageStream({
-        execute: ({ writer }) => {
-          writer.write({ type: "text-delta", delta: text, id: "1" });
+      const msgId = crypto.randomUUID();
+      const lines = [
+        `data: ${JSON.stringify({ type: "text-start", id: msgId })}\n\n`,
+        `data: ${JSON.stringify({ type: "text-delta", id: msgId, delta: agentData })}\n\n`,
+        `data: ${JSON.stringify({ type: "text-end", id: msgId })}\n\n`,
+        `data: ${JSON.stringify({ type: "finish", finishReason: "stop", usage: { promptTokens: 0, completionTokens: 0 } })}\n\n`,
+      ];
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const line of lines) controller.enqueue(encoder.encode(line));
+          controller.close();
         }
       });
-      return createUIMessageStreamResponse({ stream });
+      return new Response(stream, {
+        headers: {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          "connection": "keep-alive",
+          "x-vercel-ai-ui-message-stream": "v1",
+          "x-accel-buffering": "no",
+        }
+      });
     }
 
     // ── Step 4: Clarification — model answers freely ──────────────────────
