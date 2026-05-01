@@ -4,10 +4,137 @@
 @source "../node_modules/streamdown/dist/*.js";
 @source "../node_modules/@streamdown/code/dist/*.js";
 
-html,
-body,
-#root {
+html, body, #root {
   width: 100%;
   height: 100%;
   margin: 0;
 }
+
+/* ── Markdown table styling ───────────────────────────────────────────── */
+.sd-theme table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.75rem 0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.sd-theme thead {
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.sd-theme thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sd-theme tbody tr {
+  border-bottom: 1px solid #e8edf5;
+  transition: background 0.15s;
+}
+
+.sd-theme tbody tr:last-child {
+  border-bottom: none;
+}
+
+.sd-theme tbody tr:hover {
+  background: #f0f4ff;
+}
+
+.sd-theme tbody td {
+  padding: 10px 14px;
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.sd-theme tbody td:first-child {
+  font-weight: 600;
+  color: #1e3a5f;
+  white-space: nowrap;
+}
+
+[data-mode="dark"] .sd-theme thead {
+  background: #2a4a7a;
+}
+
+[data-mode="dark"] .sd-theme tbody tr {
+  border-bottom-color: #2d3748;
+}
+
+[data-mode="dark"] .sd-theme tbody tr:hover {
+  background: #1a2744;
+}
+
+[data-mode="dark"] .sd-theme tbody td:first-child {
+  color: #90b4e8;
+}
+
+/* ── Markdown headings ────────────────────────────────────────────────── */
+.sd-theme h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 1rem 0 0.4rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 2px solid #e8edf5;
+}
+
+.sd-theme h3 {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  margin: 0.9rem 0 0.35rem;
+}
+
+[data-mode="dark"] .sd-theme h2,
+[data-mode="dark"] .sd-theme h3 {
+  color: #90b4e8;
+  border-bottom-color: #2d3748;
+}
+
+.sd-theme p {
+  margin: 0.3rem 0;
+  line-height: 1.6;
+}
+
+.sd-theme strong {
+  font-weight: 600;
+}
+
+.sd-theme hr {
+  border: none;
+  border-top: 1px solid #e8edf5;
+  margin: 0.8rem 0;
+}
+
+[data-mode="dark"] .sd-theme hr {
+  border-top-color: #2d3748;
+}
+
+/* ── Thinking indicator ───────────────────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+.thinking-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1e3a5f;
+  display: inline-block;
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+[data-mode="dark"] .thinking-dot { background: #90b4e8; }

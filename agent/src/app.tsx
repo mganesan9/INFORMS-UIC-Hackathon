@@ -21,7 +21,6 @@ import {
   StopIcon,
   TrashIcon,
   GearIcon,
-  ChatCircleDotsIcon,
   CircleIcon,
   MoonIcon,
   SunIcon,
@@ -29,14 +28,17 @@ import {
   XCircleIcon,
   BrainIcon,
   CaretDownIcon,
-  BugIcon,
   PlugsConnectedIcon,
   PlusIcon,
   SignInIcon,
   XIcon,
   WrenchIcon,
   PaperclipIcon,
-  ImageIcon
+  ImageIcon,
+  HeartbeatIcon,
+  MagnifyingGlassIcon,
+  ChartLineUpIcon,
+  UserIcon
 } from "@phosphor-icons/react";
 
 // ── Attachment helpers ────────────────────────────────────────────────
@@ -445,16 +447,16 @@ function Chat() {
       )}
 
       {/* Header */}
-      <header className="px-5 py-4 bg-kumo-base border-b border-kumo-line">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
+      <header className="px-5 py-3 bg-kumo-base border-b border-kumo-line">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-kumo-default">
-              <span className="mr-2">⛅</span>Agent Starter
-            </h1>
-            <Badge variant="secondary">
-              <ChatCircleDotsIcon size={12} weight="bold" className="mr-1" />
-              AI Chat
-            </Badge>
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#1e3a5f]">
+              <HeartbeatIcon size={20} weight="bold" color="#fff" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-kumo-default leading-tight">Care Analytics</h1>
+              <p className="text-xs text-kumo-subtle leading-tight">Healthcare Cost Intelligence</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
@@ -466,15 +468,6 @@ function Chat() {
               <Text size="xs" variant="secondary">
                 {connected ? "Connected" : "Disconnected"}
               </Text>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <BugIcon size={14} className="text-kumo-inactive" />
-              <Switch
-                checked={showDebug}
-                onCheckedChange={setShowDebug}
-                size="sm"
-                aria-label="Toggle debug mode"
-              />
             </div>
             <ThemeToggle />
             <div className="relative" ref={mcpPanelRef}>
@@ -655,37 +648,35 @@ function Chat() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-5 py-6 space-y-5">
+        <div className="max-w-5xl mx-auto px-5 py-6 space-y-5">
           {messages.length === 0 && (
-            <Empty
-              icon={<ChatCircleDotsIcon size={32} />}
-              title="Start a conversation"
-              contents={
-                <div className="flex flex-wrap justify-center gap-2">
-                  {[
-                    "What's the weather in Paris?",
-                    "What timezone am I in?",
-                    "Calculate 5000 * 3",
-                    "Remind me in 5 minutes to take a break"
-                  ].map((prompt) => (
-                    <Button
-                      key={prompt}
-                      variant="outline"
-                      size="sm"
-                      disabled={isStreaming}
-                      onClick={() => {
-                        sendMessage({
-                          role: "user",
-                          parts: [{ type: "text", text: prompt }]
-                        });
-                      }}
-                    >
-                      {prompt}
-                    </Button>
-                  ))}
-                </div>
-              }
-            />
+            <div className="flex flex-col items-center justify-center pt-12 pb-8 gap-6">
+              <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-[#1e3a5f]">
+                <HeartbeatIcon size={34} weight="bold" color="#fff" />
+              </div>
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-kumo-default mb-1">Healthcare Cost Analytics</h2>
+                <p className="text-sm text-kumo-subtle max-w-md">Ask about patient costs, find high-risk patients, or drill into individual cost drivers.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 w-full max-w-2xl">
+                {[
+                  { icon: <ChartLineUpIcon size={16} />, text: "Top 10 most expensive patients" },
+                  { icon: <MagnifyingGlassIcon size={16} />, text: "Who has the most ED visits?" },
+                  { icon: <UserIcon size={16} />, text: "Tell me about Giovanni Paucek" },
+                  { icon: <UserIcon size={16} />, text: "Analyze Soledad White" },
+                ].map(({ icon, text }) => (
+                  <button
+                    key={text}
+                    disabled={isStreaming}
+                    onClick={() => sendMessage({ role: "user", parts: [{ type: "text", text }] })}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl border border-kumo-line bg-kumo-base hover:bg-kumo-elevated hover:border-[#1e3a5f] transition-all text-left text-sm text-kumo-default font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    <span className="text-[#1e3a5f]">{icon}</span>
+                    {text}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {messages.map((message: UIMessage, index: number) => {
@@ -812,6 +803,17 @@ function Chat() {
             );
           })}
 
+          {/* Thinking indicator */}
+          {isStreaming && messages[messages.length - 1]?.role === "user" && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-1.5 px-4 py-3 rounded-2xl rounded-bl-md bg-kumo-base border border-kumo-line">
+                <span className="thinking-dot" />
+                <span className="thinking-dot" />
+                <span className="thinking-dot" />
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -823,7 +825,7 @@ function Chat() {
             e.preventDefault();
             send();
           }}
-          className="max-w-3xl mx-auto px-5 py-4"
+          className="max-w-5xl mx-auto px-5 py-4"
         >
           <input
             ref={fileInputRef}
