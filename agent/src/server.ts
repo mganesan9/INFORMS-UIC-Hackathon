@@ -73,12 +73,20 @@ export class ChatAgent extends AIChatAgent<Env> {
     // ── Intent Agent: classify in code BEFORE calling the model ──────────
     // Llama 3.3 on Workers AI cannot reliably chain two tool calls.
     // We run the IntentAgent here so the model only needs ONE tool call.
-    const modelMessages = inlineDataUrls(await convertToModelMessages(this.messages));
-    const lastUserMessage = [...this.messages].reverse().find(m => m.role === "user");
-    const lastUserText = lastUserMessage?.parts
-      ?.filter((p: { type: string }) => p.type === "text")
-      .map((p: { type: string; text?: string }) => p.text ?? "")
-      .join(" ") ?? "";
+    let lastUserText = "";
+    try {
+      const msgs = this.messages as Array<{ role: string; parts?: Array<{ type: string; text?: string }> }>;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].role === "user") {
+          lastUserText = (msgs[i].parts ?? [])
+            .filter(p => p.type === "text")
+            .map(p => p.text ?? "")
+            .join(" ")
+            .trim();
+          break;
+        }
+      }
+    } catch { lastUserText = ""; }
     const intentResult = IntentAgent.classifyIntent(lastUserText);
 
     // Build a routing instruction for the model based on the intent
@@ -111,7 +119,7 @@ ${routingInstruction}
 - Synthea names have numeric suffixes (e.g., Giovanni385 Paucek755) — the tools handle this automatically
 - claims_transactions joins on PATIENTID not PATIENT — runCostAnalysis handles this`,
       messages: pruneMessages({
-        messages: modelMessages,
+        messages: inlineDataUrls(await convertToModelMessages(this.messages)),
         toolCalls: "before-last-2-messages"
       }),
       tools: {
