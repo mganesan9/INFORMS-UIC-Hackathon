@@ -38,18 +38,42 @@ export class IntentAgent {
 
     // Pattern 1: Portfolio/population queries
     const portfolioPatterns = [
-      /^who are (?:my|the) (?:most )?expensive/i,
+      // "top N" or "most expensive" ranking queries — most common real-world phrasing
+      /top\s+\d+/i,
+      /most expensive/i,
+      /highest cost/i,
+      /lowest cost/i,
+      /most (?:ed|emergency|inpatient|hospital)/i,
+      /expensive patients/i,
+      /costly patients/i,
+      /rank(?:ed)? (?:by|patients)/i,
+      // Population/portfolio keywords
+      /^who are (?:my|the)/i,
       /^what(?:'s| is) (?:our|the) (?:ed|emergency) utilization/i,
       /^show me.*(?:top|highest|most expensive)/i,
-      /^list (?:the )?most expensive/i,
-      /^which patients have/i,
+      /^list (?:the )?(?:most|top|highest)/i,
       /^how many patients/i,
       /^what (?:conditions|diagnoses) are most common/i,
       /^analyze (?:my|the) patient population/i,
-      /^portfolio|population|cohort/i,
+      /portfolio|population|cohort/i,
+      // Time-bounded ranking queries ("last 3 months", "this year", etc.)
+      /(?:last|past|recent)\s+\d+\s+(?:days?|weeks?|months?|years?)/i,
+      /this (?:week|month|quarter|year)/i,
     ];
 
-    // Pattern 2: Patient search queries — checked BEFORE name extraction to avoid false matches
+    // Pattern 2: Check portfolio FIRST — catches "top 5 expensive patients in last 3 months" etc.
+    for (const pattern of portfolioPatterns) {
+      if (pattern.test(lowerQuery)) {
+        return {
+          intent: "portfolio_analysis",
+          confidence: 0.9,
+          query: userQuery,
+          reasoning: "Query asks for ranked/population-level results. Routing to Patient Finder Agent.",
+        };
+      }
+    }
+
+    // Pattern 3: Patient search queries
     const searchPatterns = [
       /(?:find|search|show|list|get).*patients/i,
       /which patients (?:have|with|without)/i,
@@ -57,17 +81,8 @@ export class IntentAgent {
       /ed visits|inpatient|polypharmacy/i,
     ];
 
-    // Short-circuit on search patterns before attempting name extraction
     for (const pattern of searchPatterns) {
       if (pattern.test(lowerQuery)) {
-        if (portfolioPatterns.some(p => p.test(lowerQuery))) {
-          return {
-            intent: "portfolio_analysis",
-            confidence: 0.85,
-            query: userQuery,
-            reasoning: "Query searches patient population. Will route to Patient Finder Agent.",
-          };
-        }
         return {
           intent: "patient_search",
           confidence: 0.85,
@@ -108,19 +123,7 @@ export class IntentAgent {
       };
     }
 
-    // Check portfolio patterns
-    for (const pattern of portfolioPatterns) {
-      if (pattern.test(lowerQuery)) {
-        return {
-          intent: "portfolio_analysis",
-          confidence: 0.9,
-          query: userQuery,
-          reasoning: "Query asks about population-level trends, costs, or utilization patterns. Will route to Patient Finder Agent for ranking.",
-        };
-      }
-    }
-
-    // If we got here, ask for clarification
+    // If we got here, default to portfolio — better to show data than ask an unnecessary question
     return {
       intent: "clarification",
       confidence: 0.5,

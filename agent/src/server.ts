@@ -120,7 +120,7 @@ Exactly 5 rows. Sorted URGENT → HIGH → MEDIUM. One concrete action per row w
 - Render as a markdown table
 - Offer follow-up: "Want a full cost analysis on any of these?"
 
-**clarification** — Ask one focused question to determine which of the above applies.
+**clarification** — Only use this if the query contains a partial name with multiple possible matches, or is completely unrelated to patients. NEVER ask for clarification on ranking, listing, or "top N" queries — always treat those as portfolio_analysis.
 
 ## Important Notes:
 - Always use classifyIntent first for every new user query
