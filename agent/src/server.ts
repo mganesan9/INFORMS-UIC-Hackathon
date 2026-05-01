@@ -4,6 +4,8 @@ import { getSchedulePrompt, scheduleSchema } from "agents/schedule";
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
   convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
   pruneMessages,
   stepCountIs,
   streamText,
@@ -286,27 +288,16 @@ export class ChatAgent extends AIChatAgent<Env> {
       agentData = await costAnalystAgent(name);
     }
 
-    // ── Step 3: If we have pre-fetched data, return it directly ───────────
-    // The model is only used for clarification questions or follow-up prose.
+    // ── Step 3: If we have pre-fetched data, stream it directly ──────────
+    // Bypass the model entirely — no truncation or paraphrasing possible.
     if (agentData) {
-      const result = streamText({
-        model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
-          sessionAffinity: this.sessionAffinity
-        }),
-        system: `You are a healthcare cost analytics assistant. The data agents have already fetched and formatted the answer below.
-Your ONLY job: output the AGENT DATA exactly as-is, word for word, with no changes, no additions, no summary before or after it.
-Do not say "Here is..." or "Based on..." — just output the data directly.
-
-AGENT DATA:
-${agentData}`,
-        messages: pruneMessages({
-          messages: inlineDataUrls(await convertToModelMessages(this.messages)),
-          toolCalls: "before-last-2-messages"
-        }),
-        stopWhen: stepCountIs(1),
-        abortSignal: options?.abortSignal
+      const text = agentData;
+      const stream = createUIMessageStream({
+        execute: ({ writer }) => {
+          writer.write({ type: "text-delta", delta: text, id: "1" });
+        }
       });
-      return result.toUIMessageStreamResponse();
+      return createUIMessageStreamResponse({ stream });
     }
 
     // ── Step 4: Clarification — model answers freely ──────────────────────
