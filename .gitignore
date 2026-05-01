@@ -13,6 +13,15 @@ __pycache__/
 # Node
 node_modules/
 dist/
+# Track the compiled agent bundle (no build step — this is the deployable source)
+!agent/dist/
+!agent/dist/agent_starter/
+!agent/dist/agent_starter/index.js
+!agent/dist/agent_starter/wrangler.json
+!agent/dist/client/
+!agent/dist/client/index.html
+!agent/dist/client/.assetsignore
+!agent/dist/client/favicon.ico
 
 
 # Internal planning doc
