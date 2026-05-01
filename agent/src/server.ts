@@ -70,81 +70,53 @@ export class ChatAgent extends AIChatAgent<Env> {
     const mcpTools = this.mcp.getAITools();
     const workersai = createWorkersAI({ binding: this.env.AI });
 
+    // ── Intent Agent: classify in code BEFORE calling the model ──────────
+    // Llama 3.3 on Workers AI cannot reliably chain two tool calls.
+    // We run the IntentAgent here so the model only needs ONE tool call.
+    const modelMessages = inlineDataUrls(await convertToModelMessages(this.messages));
+    const lastUserMessage = [...this.messages].reverse().find(m => m.role === "user");
+    const lastUserText = lastUserMessage?.parts
+      ?.filter((p: { type: string }) => p.type === "text")
+      .map((p: { type: string; text?: string }) => p.text ?? "")
+      .join(" ") ?? "";
+    const intentResult = IntentAgent.classifyIntent(lastUserText);
+
+    // Build a routing instruction for the model based on the intent
+    let routingInstruction = "";
+    if (intentResult.intent === "portfolio_analysis") {
+      routingInstruction = `The Intent Agent has classified this as: PORTFOLIO_ANALYSIS.
+Your ONLY job: call listPortfolioPatients immediately, then render a markdown table with columns: Name | ED+Inpatient Cost | ED Visits | Hospitalizations | Active Conditions | Care Plan.
+Do NOT add commentary. End with: "Want a full cost analysis on any of these patients?"`;
+    } else if (intentResult.intent === "patient_specific") {
+      routingInstruction = `The Intent Agent has classified this as: PATIENT_SPECIFIC for "${intentResult.patientIdentifier ?? lastUserText}".
+Your ONLY job: call runCostAnalysis with patientName="${intentResult.patientIdentifier ?? lastUserText}", then output the result EXACTLY as returned.`;
+    } else if (intentResult.intent === "patient_search") {
+      routingInstruction = `The Intent Agent has classified this as: PATIENT_SEARCH.
+Your ONLY job: call findPatientCandidates with the search criteria, then render results as a markdown table.`;
+    } else {
+      routingInstruction = `Ask the user to clarify: are they asking about a specific patient, the full population, or searching by criteria?`;
+    }
+
     const result = streamText({
       model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         sessionAffinity: this.sessionAffinity
       }),
-      system: `You are a cost analytics agent for a value-based primary care practice. Your job is to help care managers understand WHY patients are expensive and WHICH costs can be reduced.
+      system: `You are a cost analytics agent for a value-based primary care practice.
 
-You operate in a multi-agent architecture:
-- **Intent Agent** (you are here): Classify and route every query
-- **Patient Finder Agent**: Portfolio and search queries — call listPortfolioPatients or findPatientCandidates
-- **Cost Analyst Agent**: Individual patient deep-dive — call runCostAnalysis
-- **Narrative Generator**: You synthesize findings into plain-language output
+## ROUTING DECISION (from Intent Agent)
+${routingInstruction}
 
-## YOUR FIRST STEP: Always classify the user's intent
-
-BEFORE doing anything else, use the **classifyIntent** tool. It returns one of four intents:
-
-1. **portfolio_analysis** → Call **listPortfolioPatients** (ranked population lists)
-2. **patient_specific** → Call **runCostAnalysis** (full cost deep-dive on that patient)
-3. **patient_search** → Call **findPatientCandidates** (fuzzy name/criteria search)
-4. **clarification** → Ask the user to clarify
-
-## How to respond for each intent:
-
-**portfolio_analysis** — "Who are my most expensive patients?" / "Top patients by ED visits"
-- Call **listPortfolioPatients** with the right metric and order
-- Render ONLY a markdown table with these columns: Name | ED+Inpatient Cost | Total Visits | Hospitalizations | Active Conditions | Active Meds | Care Plan
-- Do NOT add any commentary, patterns, flags, or analysis after the table
-- End with exactly one line: "Want a full cost analysis on any of these patients?"
-
-**patient_specific** — "Tell me about Giovanni Paucek's costs" / "Why is Lindsay Brekke expensive?"
-- Call **runCostAnalysis** with the patient name
-- The tool returns fully-formatted markdown. Output it EXACTLY as returned — do not summarize, paraphrase, or add anything before or after it.
-
-**patient_search** — "Find patients with >10 ED visits" / "Show me diabetics without care plans"
-- Call **findPatientCandidates** with the search criteria as the query
-- Render as a markdown table
-- Offer follow-up: "Want a full cost analysis on any of these?"
-
-**clarification** — Only use this if the query contains a partial name with multiple possible matches, or is completely unrelated to patients. NEVER ask for clarification on ranking, listing, or "top N" queries — always treat those as portfolio_analysis.
-
-## Important Notes:
-- Always use classifyIntent first for every new user query
+## Rules
 - Never show raw JSON — always render as markdown tables
-- Synthea names have numeric suffixes (e.g., Giovanni385 Paucek755) — findPatientCandidates and runCostAnalysis handle this automatically
+- Synthea names have numeric suffixes (e.g., Giovanni385 Paucek755) — the tools handle this automatically
 - claims_transactions joins on PATIENTID not PATIENT — runCostAnalysis handles this`,
-      // Prune old tool calls to save tokens on long conversations
       messages: pruneMessages({
-        messages: inlineDataUrls(await convertToModelMessages(this.messages)),
+        messages: modelMessages,
         toolCalls: "before-last-2-messages"
       }),
       tools: {
         // MCP tools from connected servers
         ...mcpTools,
-
-        // Intent Classification: Route to appropriate sub-agent
-        classifyIntent: tool({
-          description:
-            "Classify the user's intent and route to appropriate analysis. " +
-            "Understands portfolio questions (population-level), patient-specific queries, and search requests. " +
-            "Always use this first to interpret user intent.",
-          inputSchema: z.object({
-            userQuery: z.string().describe("The user's natural language question or request"),
-          }),
-          execute: async ({ userQuery }) => {
-            const result = IntentAgent.classifyIntent(userQuery);
-            return {
-              intent: result.intent,
-              confidence: result.confidence,
-              reasoning: result.reasoning,
-              patientIdentifier: result.patientIdentifier,
-              userFacingMessage: IntentAgent.formatIntentResponse(result),
-              sqlHint: IntentAgent.getSQLHint(result),
-            };
-          },
-        }),
 
         // Server-side tool: runs automatically on the server
         getWeather: tool({
